@@ -1,0 +1,1 @@
+"""Scholarship page filtering services."""
