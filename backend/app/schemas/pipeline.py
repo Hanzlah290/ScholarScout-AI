@@ -22,6 +22,23 @@ class DownloadedPDF(BaseModel):
     source_page_url: HttpUrl
 
 
+class PDFScholarshipEvidence(BaseModel):
+    is_scholarship: bool = False
+
+    scholarship_name: str = ""
+
+    scholarship_evidence: str = ""
+    funding_evidence: str = ""
+    deadline_evidence: str = ""
+    degree_evidence: str = ""
+    field_evidence: str = ""
+    application_evidence: str = ""
+
+    excluded_reason: str = ""
+
+
+
+
 class FilteredPage(DownloadedPage):
     matched_keywords: list[str] = Field(default_factory=list)
 
