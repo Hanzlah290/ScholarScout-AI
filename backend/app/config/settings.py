@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     CRAWL_MAX_PAGES: int = 50
     CRAWL_MAX_DEPTH: int = 2
     CRAWL_TIMEOUT_MS: int = 30_000
+    SCHEDULER_INTERVAL_HOURS: int = 6
 
     model_config = SettingsConfigDict(
         env_file=".env",
