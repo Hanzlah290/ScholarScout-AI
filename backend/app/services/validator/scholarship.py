@@ -1,158 +1,148 @@
-from future import annotations
+from __future__ import annotations
 
-import re
+from datetime import date
 
-from bs4 import BeautifulSoup
-
-from app.schemas.pipeline import DownloadedPage, FilteredPage
-
-STRONG_KEYWORDS = (
-"scholarship",
-"scholarships",
-"financial aid",
-"financial support",
-"tuition waiver",
-"fellowship",
-"funding",
-"grant",
-"stipend",
+from app.models.source import Source
+from app.schemas.pipeline import (
+    ScholarshipExtraction,
+    StoredPage,
+    ValidatedScholarship,
 )
 
-SUPPORTING_KEYWORDS = (
-"international student",
-"international students",
-"graduate admission",
-"admission",
-"master",
-"masters",
-"postgraduate",
-)
 
-EXCLUDED_URL_TERMS = (
-"/ourstory",
-"/leadership",
-"/governance",
-"/schoolsandoffices",
-"/factsandfigures",
-"/about",
-"/campus",
-"/history",
-"/contact",
-)
+class ScholarshipValidator:
+    """Validate extracted scholarships against Version 1 rules."""
 
-class ScholarshipPageFilter:
+    ALLOWED_COUNTRY = "China"
 
-
-
-def __init__(
-    self,
-    strong_keywords: tuple[str, ...] = STRONG_KEYWORDS,
-    supporting_keywords: tuple[str, ...] = SUPPORTING_KEYWORDS,
-) -> None:
-    self.strong_keywords = tuple(
-        keyword.lower()
-        for keyword in strong_keywords
-    )
-    self.supporting_keywords = tuple(
-        keyword.lower()
-        for keyword in supporting_keywords
+    TARGET_DEGREE_KEYWORDS = (
+        "master",
+        "master's",
+        "masters",
     )
 
-def filter(
-    self,
-    pages: list[DownloadedPage],
-) -> list[FilteredPage]:
-    results: list[FilteredPage] = []
+    TARGET_FIELD_KEYWORDS = (
+        "software engineering",
+        "computer science",
+        "computer science and technology",
+        "software technology",
+        "information technology",
+        "information systems",
+        "computing",
+        "computer engineering",
+        "informatics",
+    )
 
-    for page in pages:
-        matched = self._matches(page)
+    EXCLUDED_SCHOLARSHIP_KEYWORDS = (
+        "chinese government scholarship",
+        "csc scholarship",
+        "csc",
+    )
 
-        if matched:
-            results.append(
-                FilteredPage(
-                    **page.model_dump(),
-                    matched_keywords=matched,
-                )
+    def validate(
+        self,
+        extraction: ScholarshipExtraction,
+        page: StoredPage,
+        source: Source,
+    ) -> ValidatedScholarship:
+        """
+        Validate one extracted scholarship against Version 1 rules.
+
+        Version 1 scope:
+        - Country must be China.
+        - Scholarship must be a real scholarship.
+        - CSC / Chinese Government Scholarship is excluded.
+        - Target degree is Master's.
+        - Target field is Software Engineering or a closely related
+          computing field.
+        - Application link must be HTTPS.
+        """
+
+        # ---------------------------------------------------------
+        # 1. Scholarship must actually be identified
+        # ---------------------------------------------------------
+        if not extraction.is_scholarship:
+            raise ValueError(
+                "Source does not identify a valid scholarship opportunity."
             )
 
-    return results
+        # ---------------------------------------------------------
+        # 2. Country scope
+        # ---------------------------------------------------------
+        if extraction.country.strip().lower() != self.ALLOWED_COUNTRY.lower():
+            raise ValueError(
+                "Scholarship country scope is limited to China."
+            )
 
-def _matches(
-    self,
-    page: DownloadedPage,
-) -> list[str]:
-    url = str(page.url).lower()
+        # ---------------------------------------------------------
+        # 3. CSC is explicitly outside Version 1 scope
+        # ---------------------------------------------------------
+        scholarship_text = (
+            f"{extraction.title} "
+            f"{extraction.summary}"
+        ).lower()
 
-    if any(term in url for term in EXCLUDED_URL_TERMS):
-        return []
+        if any(
+            keyword in scholarship_text
+            for keyword in self.EXCLUDED_SCHOLARSHIP_KEYWORDS
+        ):
+            raise ValueError(
+                "Chinese Government Scholarship (CSC) is outside "
+                "Version 1 scope."
+            )
 
-    soup = BeautifulSoup(page.html, "html.parser")
+        # ---------------------------------------------------------
+        # 4. Target degree must be Master's
+        # ---------------------------------------------------------
+        degree_text = extraction.degree.lower()
 
-    for element in soup(
-        ["script", "style", "noscript", "svg"]
-    ):
-        element.decompose()
+        if not any(
+            keyword in degree_text
+            for keyword in self.TARGET_DEGREE_KEYWORDS
+        ):
+            raise ValueError(
+                "Scholarship is outside the Version 1 Master's degree target."
+            )
 
-    title = (
-        soup.title.get_text(" ", strip=True)
-        if soup.title
-        else page.title
-    )
+        # ---------------------------------------------------------
+        # 5. Target field must be computing-related
+        # ---------------------------------------------------------
+        field_text = extraction.field.lower()
 
-    headings = " ".join(
-        heading.get_text(" ", strip=True)
-        for heading in soup.find_all(["h1", "h2", "h3"])
-    )
+        if not any(
+            keyword in field_text
+            for keyword in self.TARGET_FIELD_KEYWORDS
+        ):
+            raise ValueError(
+                "Field is outside the Version 1 computing target."
+            )
 
-    body = soup.get_text(" ", strip=True)
+        # ---------------------------------------------------------
+        # 6. Application link must use HTTPS
+        # ---------------------------------------------------------
+        application_link = str(extraction.application_link)
 
-    title = re.sub(r"\s+", " ", title).lower()
-    headings = re.sub(r"\s+", " ", headings).lower()
-    body = re.sub(r"\s+", " ", body).lower()
+        if not application_link.lower().startswith("https://"):
+            raise ValueError(
+                "Application link must use HTTPS."
+            )
 
-    structural_text = f"{url} {title} {headings}"
+        # ---------------------------------------------------------
+        # 7. Determine scholarship status
+        # ---------------------------------------------------------
+        status = "Open"
 
-    strong_structural = [
-        keyword
-        for keyword in self.strong_keywords
-        if keyword in structural_text
-    ]
+        if extraction.deadline is not None:
+            if extraction.deadline < date.today():
+                status = "Closed"
 
-    strong_body = [
-        keyword
-        for keyword in self.strong_keywords
-        if keyword in body
-    ]
-
-    supporting_body = [
-        keyword
-        for keyword in self.supporting_keywords
-        if keyword in body
-    ]
-
-    matched = list(
-        dict.fromkeys(
-            strong_structural
-            + strong_body
-            + supporting_body
+        # ---------------------------------------------------------
+        # 8. Build validated scholarship
+        # ---------------------------------------------------------
+        return ValidatedScholarship(
+            **extraction.model_dump(),
+            source_id=source.id,
+            source_url=page.url,
+            raw_page_path=page.path,
+            status=status,
         )
-    )
-
-    # Best case:
-    # A scholarship/funding term appears in the URL, title,
-    # or heading. This is strong page-level evidence.
-    if strong_structural:
-        return matched
-
-    # If there is no structural evidence, require at least
-    # two different strong scholarship signals in the body.
-    if len(set(strong_body)) >= 2:
-        return matched
-
-    # A single strong term in the body is only accepted when
-    # there is also supporting evidence that the page concerns
-    # graduate/international admissions.
-    if strong_body and supporting_body:
-        return matched
-
-    return []

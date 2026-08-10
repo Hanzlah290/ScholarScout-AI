@@ -69,13 +69,14 @@ def main() -> None:
         return
 
     print("PDF accepted.")
-    print("Scholarship:", evidence.scholarship_name)
+    print("Scholarship name:", evidence.scholarship_name)
+    print("Scholarship evidence:", evidence.scholarship_evidence)
+    print("Funding evidence:", evidence.funding_evidence)
+    print("Deadline evidence:", evidence.deadline_evidence)
     print("Degree evidence:", evidence.degree_evidence)
     print("Field evidence:", evidence.field_evidence)
-    print(
-        "Application evidence:",
-        evidence.application_evidence,
-    )
+    print("Application evidence:", evidence.application_evidence)
+    print("Excluded reason:", evidence.excluded_reason)
 
 
 if __name__ == "__main__":

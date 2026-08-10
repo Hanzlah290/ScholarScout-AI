@@ -43,8 +43,7 @@ EVIDENCE RULES:
 - Do not infer a scholarship deadline from a general university admission
   deadline.
 - Do not infer funding amounts, accommodation benefits, insurance, stipends,
-  or tuition coverage unless those details are explicitly supported by the
-  supplied source.
+  or tuition coverage unless those details are explicitly supported.
 - If the source does not provide sufficient evidence for a specific
   scholarship opportunity, set is_scholarship to false.
 - When is_scholarship is false, do not invent scholarship-specific details.
@@ -54,9 +53,8 @@ SCHOLARSHIP IDENTIFICATION:
 Set is_scholarship to true only when the source itself clearly identifies a
 specific scholarship opportunity relevant to the target.
 
-- Before setting is_scholarship=true, identify the exact scholarship name
-  from the source text.
-- The scholarship name must be supported by the source itself.
+- Identify the exact scholarship name from the source.
+- The scholarship name must be supported directly by the source.
 
 Set is_scholarship to false when:
 
@@ -71,17 +69,15 @@ TARGET:
 
 - Target degree: Master's.
 - Target field: Software Engineering or a closely related computing field.
-- A computing field such as Computer Science and Technology may qualify as
-  closely related.
-- Do not assume that every Master's program in a university qualifies.
+- Computer Science and Technology may qualify as closely related.
+- Do not assume every Master's program qualifies.
 
 DEADLINES:
 
-- Use an ISO date (YYYY-MM-DD) only when the source explicitly supports that
-  specific scholarship deadline.
-- Do not convert a general admission/application period into a scholarship
-  deadline.
-- If a scholarship deadline cannot be established, use null.
+- Use YYYY-MM-DD only when the source explicitly supports that specific
+  scholarship deadline.
+- Do not convert a general admission deadline into a scholarship deadline.
+- If the scholarship deadline cannot be established, use null.
 
 APPLICATION LINK:
 
@@ -103,170 +99,96 @@ SUMMARY:
 
 - Keep the summary concise and factual.
 - Do not claim that a scholarship exists when the evidence is insufficient.
-
-OUTPUT:
-Return structured data matching the provided scholarship schema.
 """.strip()
 
 
 EVIDENCE_SYSTEM_PROMPT = """
-You extract scholarship evidence from official Chinese university webpages
-or official university PDFs for ScholarScout AI Version 1.
+You extract scholarship EVIDENCE from an official Chinese university PDF
+for ScholarScout AI Version 1.
 
-Your job is NOT to create a scholarship summary.
+Your job is NOT to summarize the PDF.
 
-Your job is to identify a specific scholarship opportunity and place each
-piece of evidence into the CORRECT evidence field.
-
-VERSION 1 SCOPE:
-
-- Country: China only.
-- Source must be an official Chinese university source.
-- Target degree: Master's.
-- Target field: Software Engineering or a closely related computing field.
-- Chinese Government Scholarship (CSC) is OUT OF SCOPE.
-- Never accept or create a CSC scholarship record.
-
-STRICT EVIDENCE SEPARATION:
+Your job is to identify and separately return direct evidence for exactly these
+fields:
 
 1. scholarship_name
-- Contains ONLY the exact name of the scholarship.
-- Copy the scholarship name from the source when possible.
-- Do NOT put funding information here.
-- Do NOT put degree, field, deadline, or application information here.
-- Example:
-  "Beijing Government Scholarship"
-
 2. scholarship_evidence
-- Contains ONLY source text proving that the named scholarship exists.
-- It should identify the scholarship or clearly describe the scholarship
-  opportunity.
-- Do NOT put funding amounts here unless they are necessary to identify the
-  scholarship.
-- Do NOT put degree or field information here unless needed to identify the
-  scholarship.
-
 3. funding_evidence
-- Contains ONLY evidence about financial benefits.
-- This may include tuition coverage, tuition waivers, accommodation,
-  accommodation subsidies, insurance, stipends, grants, or award amounts.
-- Include the amount and unit when explicitly provided.
-- Do NOT put degree information here.
-- Do NOT put deadline information here.
-- Do NOT put application URLs here.
-
 4. deadline_evidence
-- Contains ONLY evidence about the application deadline or scholarship
-  deadline.
-- Include the date and the surrounding wording that explicitly connects the
-  date to the scholarship.
-- Do NOT use a general university admission deadline unless the source
-  explicitly identifies it as the deadline for this scholarship.
-- If the source does not clearly connect a date to the scholarship, return
-  an empty string.
-- Do NOT put funding, degree, or field information here.
-
 5. degree_evidence
-- Contains ONLY evidence identifying the eligible degree level.
-- For this Version 1 target, this should normally contain evidence that the
-  scholarship applies to Master's students/programs.
-- Examples:
-  "Master's students"
-  "Applicants for master's degree programs"
-- Do NOT put funding amounts here.
-- Do NOT put field names here.
-- Do NOT put deadlines here.
-
 6. field_evidence
-- Contains ONLY evidence identifying the eligible academic field/program.
-- The field must be Software Engineering or a closely related computing field.
-- Examples:
-  "Computer Science and Technology"
-  "Software Engineering"
-- Do NOT put funding information here.
-- Do NOT put degree information here unless the source text is inseparable
-  and specifically identifies the program.
-- Do NOT put deadlines here.
-
 7. application_evidence
-- Contains ONLY evidence of the official application URL or application
-  method for the scholarship.
-- Prefer the exact official application URL stated in the source.
-- Do NOT put scholarship names, funding, deadlines, degree, or field
-  information here.
-- Never invent or modify a URL.
 
-8. excluded_reason
-- Leave empty when the scholarship is accepted.
-- When is_scholarship is false, briefly explain why the source should not be
-  accepted.
-- Examples:
-  "Chinese Government Scholarship (CSC) is outside Version 1 scope."
-  "No specific scholarship opportunity could be identified."
-  "Scholarship does not apply to the target Master's computing field."
+STRICT SEPARATION RULES:
 
-SCHOLARSHIP ACCEPTANCE:
+SCHOLARSHIP NAME:
+- scholarship_name must contain ONLY the exact scholarship name.
+- Do not put funding, deadline, degree, field, or application information
+  inside scholarship_name.
 
-Set is_scholarship=true ONLY when ALL of the following are sufficiently
-supported by the source:
+SCHOLARSHIP EVIDENCE:
+- scholarship_evidence must contain only text supporting that the named
+  scholarship exists.
+- Do not use this field for funding, deadline, degree, field, or application
+  details unless that text is necessary to identify the scholarship.
 
-- A specific scholarship can be identified.
-- The scholarship is not CSC.
-- The scholarship is relevant to Master's study.
-- The scholarship applies to Software Engineering or a closely related
-  computing field.
-- The source provides enough evidence to identify the opportunity.
+FUNDING EVIDENCE:
+- funding_evidence must contain ONLY evidence describing scholarship funding,
+  such as tuition coverage, stipend, accommodation, insurance, grants,
+  scholarships amounts, or award amounts.
+- Do NOT include study duration, degree duration, program duration,
+  degree eligibility, field information, or application deadlines.
+- If the source gives both funding and study duration in the same sentence,
+  extract only the funding portion when possible.
+- Do not put deadlines or application URLs here.
 
-If these conditions are not sufficiently supported:
+DEADLINE EVIDENCE:
+- deadline_evidence must contain ONLY evidence about the scholarship's
+  application/award deadline or application period.
+- Do not use a general university admission deadline unless the source
+  explicitly connects it to the identified scholarship.
+- If no scholarship-specific deadline is supported, leave this field empty.
 
-- Set is_scholarship=false.
-- Leave unsupported evidence fields empty.
-- Explain the rejection in excluded_reason.
-- Never guess missing information.
+DEGREE EVIDENCE:
+- degree_evidence must contain ONLY evidence identifying the eligible degree.
+- The target is Master's.
+- Study duration may be included when it directly describes the target
+  Master's degree.
+- Do not put funding amounts, scholarship benefits, deadlines, fields,
+  or application URLs here.
+
+FIELD EVIDENCE:
+- field_evidence must contain ONLY evidence identifying the eligible field
+  or program.
+- Software Engineering and closely related computing fields are relevant.
+- Computer Science and Technology may qualify.
+- Do not put degree, funding, or deadline information here.
+
+APPLICATION EVIDENCE:
+- application_evidence must contain ONLY the official application URL or
+  direct evidence identifying the official application route.
+- Do not put funding, deadline, degree, or field information here.
 
 IMPORTANT:
 
-Each evidence field has ONE purpose.
+- Extract only facts directly supported by the PDF.
+- Never invent or infer missing information.
+- Chinese Government Scholarship (CSC) is OUT OF SCOPE for Version 1.
+- If the PDF describes CSC / Chinese Government Scholarship, set
+  is_scholarship to false and explain this in excluded_reason.
+- A general admission guide is not automatically a scholarship.
+- A scholarship application form alone is not sufficient evidence.
+- If a field is not supported, leave it empty.
+- Do not copy the same evidence into multiple fields unless absolutely
+  necessary.
+- Keep each evidence field focused on its own category.
 
-Never move information from one category into another category just because
-the information is available.
-
-For example:
-
-WRONG:
-degree_evidence = "Master student: CNY 20,000/person"
-
-CORRECT:
-funding_evidence = "Master student: CNY 20,000/person"
-
-And:
-
-WRONG:
-field_evidence = "Master's students: CNY 20,000/person"
-
-CORRECT:
-degree_evidence = "Master's students"
-
-And:
-
-WRONG:
-deadline_evidence = "Master's students: CNY 20,000/person"
-
-CORRECT:
-deadline_evidence = only the scholarship deadline evidence.
-
-If a category has no reliable evidence, return an empty string.
-
-OUTPUT:
-
-Return ONLY structured data matching the PDFScholarshipEvidence schema.
-Do not create additional fields.
-"""
-
+Return JSON matching PDFScholarshipEvidence.
+""".strip()
 
 
 class GeminiScholarshipExtractor:
-    """Extract scholarship data from HTML pages and PDFs using Gemini."""
+    """Extract scholarship data and PDF evidence using Gemini."""
 
     def __init__(
         self,
@@ -277,7 +199,9 @@ class GeminiScholarshipExtractor:
             self.client = client
         else:
             if not settings.GEMINI_API_KEY:
-                raise ValueError("GEMINI_API_KEY is not configured")
+                raise ValueError(
+                    "GEMINI_API_KEY is not configured"
+                )
 
             self.client = genai.Client(
                 api_key=settings.GEMINI_API_KEY
@@ -360,80 +284,45 @@ class GeminiScholarshipExtractor:
             response.text
         )
 
-    
-def extract_pdf_evidence(
-    self,
-    pdf: DownloadedPDF,
-) -> PDFScholarshipEvidence:
-    prompt = (
-        f"{EVIDENCE_SYSTEM_PROMPT}\n\n"
-        "Analyze the following official university PDF.\n\n"
-        f"PDF URL: {pdf.url}\n"
-        f"Source page URL: {pdf.source_page_url}\n"
-        f"PDF title: {pdf.title}\n\n"
-        "SOURCE TEXT:\n"
-        f"{pdf.text[:60_000]}"
-    )
-
-    response = self.client.models.generate_content(
-        model=self.model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0,
-            response_mime_type="application/json",
-            response_json_schema=(
-                PDFScholarshipEvidence.model_json_schema()
-            ),
-        ),
-    )
-
-    if not response.text:
-        raise ValueError(
-            "Gemini returned an empty PDF evidence response"
-        )
-
-    return PDFScholarshipEvidence.model_validate_json(
-        response.text
-    )
-
     def extract_pdf_evidence(
-    self,
-    pdf: DownloadedPDF,
-) -> PDFScholarshipEvidence:
+        self,
+        pdf: DownloadedPDF,
+    ) -> PDFScholarshipEvidence:
         prompt = (
-        f"{EVIDENCE_SYSTEM_PROMPT}\n\n"
-        "Extract scholarship evidence from this official "
-        "university PDF.\n\n"
-        f"PDF URL: {pdf.url}\n"
-        f"Source page URL: {pdf.source_page_url}\n"
-        f"PDF title: {pdf.title}\n\n"
-        f"PDF text:\n{pdf.text[:60_000]}"
-    )
-
-    response = self.client.models.generate_content(
-        model=self.model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0,
-            response_mime_type="application/json",
-            response_json_schema=(
-                PDFScholarshipEvidence.model_json_schema()
-            ),
-        ),
-    )
-
-    if not response.text:
-        raise ValueError(
-            "Gemini returned an empty PDF evidence response"
+            f"{EVIDENCE_SYSTEM_PROMPT}\n\n"
+            "Extract scholarship evidence from this official "
+            "university PDF.\n\n"
+            f"PDF URL: {pdf.url}\n"
+            f"Source page URL: {pdf.source_page_url}\n"
+            f"PDF title: {pdf.title}\n\n"
+            f"PDF text:\n{pdf.text[:60_000]}"
         )
 
-    return PDFScholarshipEvidence.model_validate_json(
-        response.text
-    )
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0,
+                response_mime_type="application/json",
+                response_json_schema=(
+                    PDFScholarshipEvidence.model_json_schema()
+                ),
+            ),
+        )
 
+        if not response.text:
+            raise ValueError(
+                "Gemini returned an empty PDF evidence response"
+            )
+
+        return PDFScholarshipEvidence.model_validate_json(
+            response.text
+        )
 
     @staticmethod
-    def _clean_html(html: str) -> str:
+    def _clean_html(
+        html: str,
+    ) -> str:
         soup = BeautifulSoup(
             html,
             "html.parser",
