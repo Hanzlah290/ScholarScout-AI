@@ -1,10 +1,16 @@
-import ScholarshipCard from "@/components/scholarships/ScholarshipCard";
-import { mockScholarship } from "@/mock/scholarships";
+import ScholarshipList from "@/components/scholarships/ScholarshipList";
+import type { Scholarship } from "@/types/scholarship";
 
-export default function ContentSection() {
+interface ContentSectionProps {
+  scholarships: Scholarship[];
+}
+
+export default function ContentSection({
+  scholarships,
+}: ContentSectionProps) {
   return (
     <section>
-      <ScholarshipCard scholarship={mockScholarship} />
+      <ScholarshipList scholarships={scholarships} />
     </section>
   );
 }
