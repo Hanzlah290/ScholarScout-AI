@@ -7,4 +7,10 @@ export interface Scholarship {
   funding: string;
   deadline: string | null;
   status: string;
+
+  requirements: string[];
+  documentsRequired: string[];
+  aiSummary: string;
+  applicationLink: string;
+  sourceUrl: string;
 }
