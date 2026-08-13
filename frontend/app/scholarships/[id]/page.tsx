@@ -7,8 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-import { mockScholarships } from "@/mock/scholarships";
+import { getScholarshipById } from "@/services/scholarshipService";
 
 interface ScholarshipDetailsPageProps {
   params: Promise<{
@@ -21,9 +20,7 @@ export default async function ScholarshipDetailsPage({
 }: ScholarshipDetailsPageProps) {
   const { id } = await params;
 
-  const scholarship = mockScholarships.find(
-    (item) => item.id === id
-  );
+  const scholarship = await getScholarshipById(id);
 
   if (!scholarship) {
     notFound();
