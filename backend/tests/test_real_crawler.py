@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from app.models.source import Source
 from app.services.connectors.university import UniversitySourceConnector
+from app.services.connectors.metrics import metrics_tracker
 
 
 async def main():
@@ -14,30 +15,24 @@ async def main():
     )
 
     connector = UniversitySourceConnector(
-        max_pages=30,
+        max_pages=15,
         max_depth=2,
         timeout_ms=30_000,
     )
 
-    print("=== CONNECTOR TEST ===")
+    print("Starting ScholarScout crawler test...")
     print("Source:", source.name)
     print("Base URL:", source.base_url)
 
     pages = await connector.fetch(source)
 
-    print("Pages fetched:", len(pages))
+    print(f"\nPages downloaded: {len(pages)}")
+    for page in pages[:5]:  # Print first 5
+        print(f"[{page.depth}] {page.url} | {page.title[:60]}")
 
-    for page in pages:
-        print(
-            f"{page.depth} | "
-            f"{page.url} | "
-            f"{page.title[:80]}"
-        )
-
-
-if __name__ == "__main__":
-    from app.services.connectors.metrics import metrics_tracker
-    asyncio.run(main())
     print("\n=== CRAWLER METRICS BASELINE ===")
     print(metrics_tracker.get_report())
 
+
+if __name__ == "__main__":
+    asyncio.run(main())

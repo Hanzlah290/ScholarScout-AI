@@ -128,3 +128,98 @@ async def test_pipeline_runs_successfully() -> None:
 
     assert source.status == "healthy"
     assert source.last_checked is not None
+
+
+    @pytest.mark.asyncio
+    async def test_pipeline_skips_invalid_scholarship() -> None:
+        source = Source(
+        id=uuid4(),
+        name="Example University",
+        base_url="https://www.example.edu.cn",
+        source_type="university",
+        enabled=True,
+        status="active",
+    )
+
+    page = DownloadedPage(
+        source_id=source.id,
+        url="https://www.example.edu.cn/scholarship",
+        title="Undergraduate Scholarship",
+        html="<html><body>Scholarship</body></html>",
+        depth=0,
+    )
+
+    filtered_page = FilteredPage(
+        **page.model_dump(),
+        matched_keywords=["scholarship"],
+    )
+
+    stored_page = StoredPage(
+        source_id=source.id,
+        url=page.url,
+        title=page.title,
+        path="storage/raw_pages/example.html",
+        content_hash="invalid-test-hash",
+    )
+
+    extraction = ScholarshipExtraction(
+        is_scholarship=False,
+        title="Not a Scholarship",
+        university="Example University",
+        country="China",
+        degree="Master's",
+        field="Software Engineering",
+        funding="None",
+        deadline=None,
+        application_link="https://www.example.edu.cn/apply",
+        summary="This page is not a scholarship opportunity.",
+    )
+
+    connector = MagicMock()
+    connector.fetch = AsyncMock(return_value=[page])
+
+    page_filter = MagicMock()
+    page_filter.filter.return_value = [filtered_page]
+
+    collector = MagicMock()
+    collector.store.return_value = stored_page
+
+    extractor = MagicMock()
+    extractor.extract.return_value = extraction
+
+    validator = MagicMock()
+    validator.validate.side_effect = ValueError(
+        "Source does not identify a valid scholarship opportunity."
+    )
+
+    duplicate_checker = MagicMock()
+
+    db = MagicMock()
+
+    pipeline = ScholarshipDiscoveryPipeline(
+        connector=connector,
+        page_filter=page_filter,
+        collector=collector,
+        extractor=extractor,
+        validator=validator,
+        duplicate_checker=duplicate_checker,
+    )
+
+    result = await pipeline.run(db, source)
+
+    assert result.pages_scanned == 1
+    assert result.pages_filtered == 1
+    assert result.scholarships_found == 0
+    assert result.new_scholarships == 0
+    assert result.updated_scholarships == 0
+
+    validator.validate.assert_called_once_with(
+        extraction,
+        stored_page,
+        source,
+    )
+
+    duplicate_checker.upsert.assert_not_called()
+
+    assert source.status == "healthy"
+    assert source.last_checked is not None
