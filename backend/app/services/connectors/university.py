@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import heapq
+import time
 from itertools import count
 from urllib.parse import urldefrag, urljoin, urlparse
 
@@ -8,6 +9,7 @@ from playwright.async_api import Page as PlaywrightPage, async_playwright
 
 from app.models.source import Source
 from app.schemas.pipeline import DownloadedPage
+from app.services.connectors.metrics import metrics_tracker
 
 
 RELEVANT_URL_TERMS = (
@@ -47,9 +49,6 @@ class UniversitySourceConnector:
 
         # Priority queue:
         # lower priority number = crawled earlier
-        #
-        # Relevant URLs receive a better score, allowing relevant
-        # depth-2 pages to be reached before generic depth-1 pages.
         queue: list[tuple[int, int, str, int]] = []
 
         counter = count()
@@ -82,11 +81,36 @@ class UniversitySourceConnector:
 
                     visited.add(url)
 
+                    # Instrumentation: measure execution duration & payload size
+                    start_time = time.perf_counter()
+                    failed = False
+                    status_code = 0
+                    html = ""
+                    title = ""
+
                     try:
-                        await self._load(page, url)
+                        response = await self._load(page, url)
+                        if response:
+                            status_code = response.status
                         html = await page.content()
                         title = await page.title()
                     except Exception:
+                        failed = True
+                        status_code = 500
+                    finally:
+                        latency_sec = time.perf_counter() - start_time
+                        response_size = len(html.encode("utf-8")) if html else 0
+
+                        # Record network metrics into tracker
+                        metrics_tracker.record_request(
+                            url=url,
+                            status_code=status_code,
+                            response_size=response_size,
+                            latency_sec=latency_sec,
+                            failed=failed,
+                        )
+
+                    if failed:
                         continue
 
                     pages.append(
@@ -153,28 +177,18 @@ class UniversitySourceConnector:
         self,
         page: PlaywrightPage,
         url: str,
-    ) -> None:
-        await page.goto(
+    ):
+        response = await page.goto(
             url,
             wait_until="domcontentloaded",
             timeout=self.timeout_ms,
         )
         await page.wait_for_timeout(500)
+        return response
 
     @staticmethod
     def _priority(url: str, depth: int) -> int:
-        """
-        Calculate crawl priority.
-
-        Lower number = higher priority.
-
-        Relevant URLs receive a strong priority boost so that
-        scholarship/admission pages discovered at depth 2 can
-        be crawled before generic navigation pages at depth 1.
-        """
-
         path = urlparse(url).path.lower()
-
         score = 0
 
         for term in RELEVANT_URL_TERMS:
@@ -190,7 +204,6 @@ class UniversitySourceConnector:
                 else:
                     score += 2
 
-        # Depth has some cost, but relevance can outweigh it.
         return (depth * 3) - score
 
     @staticmethod
@@ -231,12 +244,17 @@ class UniversitySourceConnector:
         current_url: str,
         href: str,
     ) -> str | None:
-        if not href or href.startswith(
+        if not href:
+            return None
+            
+        href = href.strip()
+        if href.startswith(
             (
                 "mailto:",
                 "tel:",
                 "javascript:",
                 "#",
+                "void(0)",
             )
         ):
             return None
@@ -250,6 +268,16 @@ class UniversitySourceConnector:
             return None
 
         if not parsed.netloc:
+            return None
+
+        # Filter out static assets or fragment-only links
+        path_lower = parsed.path.lower()
+        if path_lower.endswith(
+            (
+                ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", 
+                ".svg", ".ico", ".woff", ".woff2", ".ttf", ".eot"
+            )
+        ):
             return None
 
         return absolute.rstrip("/")
