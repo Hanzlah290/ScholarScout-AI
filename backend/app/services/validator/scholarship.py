@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from urllib.parse import urlparse
 from datetime import date
 
 from app.models.source import Source
@@ -118,14 +118,21 @@ class ScholarshipValidator:
             )
 
         # ---------------------------------------------------------
-        # 6. Application link must use HTTPS
+        # 6. Application link must be a valid HTTP(S) URL
         # ---------------------------------------------------------
         application_link = str(extraction.application_link)
 
-        if not application_link.lower().startswith("https://"):
+        parsed_application = urlparse(application_link)
+
+        if parsed_application.scheme.lower() not in {"http", "https"}:
             raise ValueError(
-                "Application link must use HTTPS."
-            )
+        "Application link must use HTTP or HTTPS."
+        )
+
+        if not parsed_application.netloc:
+            raise ValueError(
+        "Application link must contain a valid domain."
+        )
 
         # ---------------------------------------------------------
         # 7. Determine scholarship status

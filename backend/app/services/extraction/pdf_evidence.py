@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from google import genai
 from google.genai import types
-
 from app.config.settings import settings
 from app.schemas.pipeline import (
     DownloadedPDF,
     PDFScholarshipEvidence,
+    ScholarshipExtraction,
 )
 
 
