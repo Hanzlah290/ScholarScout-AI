@@ -71,7 +71,7 @@ class UniversitySourceConnector:
             browser = await playwright.chromium.launch(headless=True)
 
             try:
-                page = await browser.new_page()
+                page = await browser.new_page(ignore_https_errors=True)
 
                 while queue and len(pages) < self.max_pages:
                     _, _, url, depth = heapq.heappop(queue)
@@ -183,8 +183,33 @@ class UniversitySourceConnector:
             wait_until="domcontentloaded",
             timeout=self.timeout_ms,
         )
-        await page.wait_for_timeout(500)
+        try:
+            response = await page.goto(
+                url, wait_until="networkidle", timeout=self.timeout_ms
+            )
+        except Exception:
+            # Fallback if background polling prevents networkidle from resolving
+            response = await page.goto(
+                url, wait_until="domcontentloaded", timeout=self.timeout_ms
+            )
+
+        # 2. Explicitly wait for dynamic sidebar or deadline elements if present
+        common_selectors = [
+            ".basic-info",                 # Basic info sidebar widget
+            ".sidebar",                    # Universal sidebar container
+            ".program-info",               # Program details container
+            "text=Application Deadline",   # Direct text header target
+        ]
+
+        for selector in common_selectors:
+            try:
+                await page.wait_for_selector(selector, timeout=3000, state="attached")
+                break  # Active target widget found, proceed!
+            except Exception:
+                continue  # Selector not present on page, try next
+
         return response
+    
 
     @staticmethod
     def _priority(url: str, depth: int) -> int:
@@ -210,11 +235,10 @@ class UniversitySourceConnector:
     def _validate_base_url(url: str) -> str:
         parsed = urlparse(url)
 
-        if parsed.scheme != "https" or not parsed.netloc:
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError(
-                "University source base_url must be a valid HTTPS URL"
-            )
-
+            "University source base_url must be a valid HTTP or HTTPS URL"
+        )
         return url.rstrip("/")
 
     @staticmethod

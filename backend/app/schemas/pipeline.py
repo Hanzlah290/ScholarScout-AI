@@ -59,7 +59,8 @@ class ScholarshipExtraction(BaseModel):
     degree: str
     field: str
     funding: str
-    deadline: date | None
+    deadline: date | None = None          # Parsed ISO date (YYYY-MM-DD)
+    raw_deadline: str | None = None      # Textual deadline ("In October", "June 1 for Sept intake")
     requirements: list[str] = Field(default_factory=list)
     documents_required: list[str] = Field(default_factory=list)
     application_link: HttpUrl

@@ -8,8 +8,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     GEMINI_MODEL: str = "gemini-3.1-flash-lite"
     RAW_STORAGE_PATH: str = "storage/raw_pages"
-    CRAWL_MAX_PAGES: int = 50
-    CRAWL_MAX_DEPTH: int = 2
+    CRAWL_MAX_PAGES: int = 25
+    CRAWL_MAX_DEPTH: int = 10
     CRAWL_TIMEOUT_MS: int = 30_000
     SCHEDULER_INTERVAL_HOURS: int = 6
     APP_ENV: str = "development"

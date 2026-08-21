@@ -49,8 +49,8 @@ class Scholarship(Base):
     )
 
     funding: Mapped[str] = mapped_column(
-    Text,
-    nullable=False,
+        Text,
+        nullable=False,
     )
 
     deadline: Mapped[date | None] = mapped_column(
@@ -58,9 +58,14 @@ class Scholarship(Base):
         nullable=True,
     )
 
+    raw_deadline: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
     application_link: Mapped[str] = mapped_column(
         String(500),
-        unique=True,
+        unique=False,
         nullable=False,
     )
 
@@ -69,12 +74,12 @@ class Scholarship(Base):
         nullable=False,
     )
 
-    requirements: Mapped[dict | None] = mapped_column(
+    requirements: Mapped[dict | list | None] = mapped_column(
         JSONB,
         nullable=True,
     )
 
-    documents_required: Mapped[dict | None] = mapped_column(
+    documents_required: Mapped[dict | list | None] = mapped_column(
         JSONB,
         nullable=True,
     )

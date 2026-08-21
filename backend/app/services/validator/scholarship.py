@@ -19,6 +19,7 @@ class ScholarshipValidator:
         "master",
         "master's",
         "masters",
+        "postgraduate",
     )
 
     TARGET_FIELD_KEYWORDS = (
@@ -31,6 +32,11 @@ class ScholarshipValidator:
         "computing",
         "computer engineering",
         "informatics",
+        "artificial intelligence",
+        "ai",
+        "data science",
+        "cyber security",
+        "cybersecurity",
     )
 
     EXCLUDED_SCHOLARSHIP_KEYWORDS = (
@@ -75,8 +81,9 @@ class ScholarshipValidator:
             )
 
         # ---------------------------------------------------------
-        # 3. CSC is explicitly outside Version 1 scope
+        # 3. CSC is explicitly outside Version 1 scope 
         # ---------------------------------------------------------
+
         scholarship_text = (
             f"{extraction.title} "
             f"{extraction.summary}"
@@ -87,9 +94,9 @@ class ScholarshipValidator:
             for keyword in self.EXCLUDED_SCHOLARSHIP_KEYWORDS
         ):
             raise ValueError(
-                "Chinese Government Scholarship (CSC) is outside "
-                "Version 1 scope."
+                "Chinese Government Scholarship (CSC) is outside Version 1 scope."
             )
+        
 
         # ---------------------------------------------------------
         # 4. Target degree must be Master's
@@ -142,6 +149,10 @@ class ScholarshipValidator:
         if extraction.deadline is not None:
             if extraction.deadline < date.today():
                 status = "Closed"
+            else:
+                status = "Open"
+        else:
+            status = "Open"
 
         # ---------------------------------------------------------
         # 8. Build validated scholarship

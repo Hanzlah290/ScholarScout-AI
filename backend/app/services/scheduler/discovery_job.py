@@ -40,25 +40,32 @@ def build_pipeline() -> ScholarshipDiscoveryPipeline:
 
 
 async def run_scheduled_discovery() -> None:
-    """Run discovery for each enabled source without letting one source block others."""
+    """Run discovery for each enabled source using isolated database sessions."""
     if not _discovery_lock.acquire(blocking=False):
         raise DiscoveryAlreadyRunning("A discovery run is already in progress")
 
-    db = SessionLocal()
     try:
-        sources = db.scalars(
-            select(Source).where(Source.enabled.is_(True))
-        ).all()
+        # Step 1: Fetch source IDs using an isolated session
+        with SessionLocal() as db:
+            sources = db.scalars(
+                select(Source).where(Source.enabled.is_(True))
+            ).all()
+            source_ids = [s.id for s in sources]
+
         pipeline = build_pipeline()
 
-        for source in sources:
-            try:
-                await pipeline.run(db, source)
-            except Exception as exc:
-                print(
-                    "[DISCOVERY SOURCE FAILED] "
-                    f"{source.name}: {type(exc).__name__}: {exc}"
-                )
+        # Step 2: Process each source with its OWN fresh DB session
+        for sid in source_ids:
+            with SessionLocal() as db:
+                source = db.get(Source, sid)
+                if not source or not source.enabled:
+                    continue
+                try:
+                    await pipeline.run(db, source)
+                except Exception as exc:
+                    print(
+                        "[DISCOVERY SOURCE FAILED] "
+                        f"{source.name}: {type(exc).__name__}: {exc}"
+                    )
     finally:
-        db.close()
         _discovery_lock.release()

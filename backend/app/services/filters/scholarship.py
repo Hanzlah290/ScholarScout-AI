@@ -293,25 +293,23 @@ class ScholarshipPageFilter:
         content: str,
     ) -> bool:
         """
-        Reject scholarship pages that are clearly historical,
-        administrative, or results/recipient pages.
-
-        Active scholarship application pages are preserved when they
-        contain clear application/opportunity language.
+        Only reject pages if they are purely historical awardee lists
+        or result announcements, preserving active application notices.
         """
+        identity = _normalize(f"{title} {content[:1500]}")
 
-        identity = _normalize(
-            f"{title} {content[:1200]}"
+        # Check for explicit result/winner list markers
+        result_keywords = (
+            "awardee list", "recipient list", "admission results",
+            "selection results", "获奖名单", "录取名单", "结果公示"
         )
-
-        is_administrative = any(
-            _contains(identity, keyword)
-            for keyword in ADMINISTRATIVE_PAGE_KEYWORDS
-        )
-
-        if not is_administrative:
+        
+        is_result_page = any(_contains(identity, kw) for kw in result_keywords)
+        
+        if not is_result_page:
             return False
 
+        # If it's a result page, only keep it if active application criteria exist
         active_signal = any(
             _contains(identity, keyword)
             for keyword in ACTIVE_OPPORTUNITY_KEYWORDS
