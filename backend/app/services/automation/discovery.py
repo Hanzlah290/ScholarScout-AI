@@ -42,7 +42,6 @@ class SourceDiscoveryEngine:
         async with httpx.AsyncClient(timeout=self.timeout_sec, follow_redirects=True, headers=self.headers) as client:
             for query in self.TARGET_SEARCH_QUERIES:
                 try:
-                    # Using DuckDuckGo HTML endpoint as a deterministic, API-keyless discovery provider
                     encoded_query = urllib.parse.quote_plus(query)
                     search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
 
@@ -52,7 +51,6 @@ class SourceDiscoveryEngine:
                         for a_tag in soup.find_all("a", class_="result__url"):
                             href = a_tag.get("href")
                             if href:
-                                # Clean redirect tracking parameters if present
                                 clean_url = self._extract_clean_url(href)
                                 if clean_url:
                                     candidate_urls.append(clean_url)
@@ -76,9 +74,8 @@ class SourceDiscoveryEngine:
         """Derives a human-readable source title from the canonical domain name."""
         try:
             domain = urllib.parse.urlparse(canonical_url).netloc
-            # Remove .edu.cn or .cn extension
             clean_name = re.sub(r"\.(edu\.cn|cn)$", "", domain, flags=re.IGNORECASE)
-            parts = [part.capitalize() for part in clean_name.split(".") if part not in ["www", "oec", "study", "admissions", "yjs"]]
+            parts = [part.capitalize() for part in clean_name.split(".") if part not in ["www", "oec", "study", "admissions", "yjs", "iscen", "sie"]]
             if parts:
                 return f"{' '.join(parts).upper()} University"
             return f"{domain.upper()} Portal"
@@ -88,7 +85,7 @@ class SourceDiscoveryEngine:
     async def run_discovery(self, db: Session) -> List[Source]:
         """
         Executes full discovery: Fetch Candidate URLs -> Normalize & Qualify -> Save to PostgreSQL.
-        Newly discovered sources are assigned `next_check_at = NOW()` for immediate processing.
+        Newly discovered sources are assigned next_check_at = NOW() for immediate processing.
         """
         logger.info("[SOURCE DISCOVERY] Starting targeted university source discovery...")
         candidate_urls = await self.discover_candidate_urls()
@@ -110,11 +107,14 @@ class SourceDiscoveryEngine:
                     consecutive_failures=0
                 )
                 db.add(new_source)
-                db.commit()
-                db.refresh(new_source)
-                
-                newly_created_sources.append(new_source)
-                logger.info(f"[SOURCE DISCOVERY] Added new source: {source_name} ({canonical_url})")
+                try:
+                    db.commit()
+                    db.refresh(new_source)
+                    newly_created_sources.append(new_source)
+                    logger.info(f"[SOURCE DISCOVERY] Added new source: {source_name} ({canonical_url})")
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"[SOURCE DISCOVERY] Failed to persist source {canonical_url}: {e}")
 
         logger.info(f"[SOURCE DISCOVERY] Completed. Added {len(newly_created_sources)} new qualified sources.")
         return newly_created_sources
