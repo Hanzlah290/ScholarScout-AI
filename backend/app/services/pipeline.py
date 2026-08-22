@@ -97,24 +97,6 @@ class ScholarshipDiscoveryPipeline:
 
             db.commit()
 
-            finished_at = datetime.now(timezone.utc)
-
-            log.finished_at = finished_at
-            log.duration_seconds = int(
-                monotonic() - started
-            )
-            log.pages_scanned = len(pages)
-            log.scholarships_found = (
-                new_count + updated_count
-            )
-            log.new_scholarships = new_count
-            log.status = "success"
-
-            source.last_checked = finished_at
-            source.status = "healthy"
-
-            db.commit()
-
             return PipelineResult(
                 source_id=source.id,
                 pages_scanned=len(pages),
@@ -141,10 +123,5 @@ class ScholarshipDiscoveryPipeline:
                 log.status = "failed"
                 log.error_message = str(exc)
                 db.commit()
-
-            source.status = "error"
-            source.last_checked = finished_at
-
-            db.commit()
 
             raise
