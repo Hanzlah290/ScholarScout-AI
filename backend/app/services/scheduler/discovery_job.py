@@ -1,19 +1,12 @@
 from __future__ import annotations
 
+import logging
 from threading import Lock
 
-from sqlalchemy import select
-
-from app.config.settings import settings
 from app.database.session import SessionLocal
-from app.models.source import Source
-from app.services.collector.filesystem import RawDataCollector
-from app.services.connectors.university import UniversitySourceConnector
-from app.services.duplicate_checker.repository import ScholarshipDuplicateChecker
-from app.services.extraction.openai_extractor import GeminiScholarshipExtractor
-from app.services.filters.scholarship import ScholarshipPageFilter
-from app.services.pipeline import ScholarshipDiscoveryPipeline
-from app.services.validator.scholarship import ScholarshipValidator
+from app.services.automation.manager import AutomationManager
+
+logger = logging.getLogger(__name__)
 
 
 class DiscoveryAlreadyRunning(RuntimeError):
@@ -21,51 +14,36 @@ class DiscoveryAlreadyRunning(RuntimeError):
 
 
 _discovery_lock = Lock()
-
-
-def build_pipeline() -> ScholarshipDiscoveryPipeline:
-    """Build the Version 1 scholarship discovery pipeline."""
-    return ScholarshipDiscoveryPipeline(
-        connector=UniversitySourceConnector(
-            max_pages=settings.CRAWL_MAX_PAGES,
-            max_depth=settings.CRAWL_MAX_DEPTH,
-            timeout_ms=settings.CRAWL_TIMEOUT_MS,
-        ),
-        page_filter=ScholarshipPageFilter(),
-        collector=RawDataCollector(settings.RAW_STORAGE_PATH),
-        extractor=GeminiScholarshipExtractor(),
-        validator=ScholarshipValidator(),
-        duplicate_checker=ScholarshipDuplicateChecker(),
-    )
+_manager = AutomationManager()
 
 
 async def run_scheduled_discovery() -> None:
-    """Run discovery for each enabled source using isolated database sessions."""
+    """
+    Heartbeat job running every 6 hours.
+    Queries PostgreSQL for due sources and executes the scholarship discovery pipeline.
+    """
     if not _discovery_lock.acquire(blocking=False):
+        logger.warning("[SCHEDULER] A discovery run is already in progress. Skipping cycle.")
         raise DiscoveryAlreadyRunning("A discovery run is already in progress")
 
     try:
-        # Step 1: Fetch source IDs using an isolated session
+        logger.info("[SCHEDULER] Heartbeat triggered. Querying due sources...")
         with SessionLocal() as db:
-            sources = db.scalars(
-                select(Source).where(Source.enabled.is_(True))
-            ).all()
-            source_ids = [s.id for s in sources]
-
-        pipeline = build_pipeline()
-
-        # Step 2: Process each source with its OWN fresh DB session
-        for sid in source_ids:
-            with SessionLocal() as db:
-                source = db.get(Source, sid)
-                if not source or not source.enabled:
-                    continue
-                try:
-                    await pipeline.run(db, source)
-                except Exception as exc:
-                    print(
-                        "[DISCOVERY SOURCE FAILED] "
-                        f"{source.name}: {type(exc).__name__}: {exc}"
-                    )
+            processed = await _manager.process_due_sources(db)
+            logger.info(f"[SCHEDULER] Completed heartbeat processing for {processed} due sources.")
     finally:
         _discovery_lock.release()
+
+
+async def run_scheduled_source_discovery() -> None:
+    """
+    Discovery job running every 24 hours.
+    Executes search queries to find new university portals and seeds them into PostgreSQL.
+    """
+    logger.info("[SCHEDULER] Triggering 24-hour university source discovery...")
+    try:
+        with SessionLocal() as db:
+            new_sources = await _manager.run_discovery_cycle(db)
+            logger.info(f"[SCHEDULER] Discovery completed. Added {len(new_sources)} new sources to database.")
+    except Exception as exc:
+        logger.error(f"[SCHEDULER] Source discovery cycle failed: {exc}")
