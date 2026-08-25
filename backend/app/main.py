@@ -47,23 +47,28 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Combine configured origins from settings with localhost:3000
+origins = [
+    origin.strip()
+    for origin in settings.FRONTEND_ORIGINS.split(",")
+    if origin.strip()
+]
+if "http://localhost:3000" not in origins:
+    origins.append("http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        origin.strip()
-        for origin in settings.FRONTEND_ORIGINS.split(",")
-        if origin.strip()
-    ],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-Admin-Key"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Admin-Key"],
 )
 
-app.include_router(scholarships_router)
-app.include_router(sources_router)
+app.include_router(scholarships_router, prefix="/api/v1")
+app.include_router(sources_router, prefix="/api/v1")
 
 
-@app.get("/")
+@app.get("/api/v1/")
 def root():
     return {"status": "ok", "message": "ScholarScout AI backend is running"}
 
