@@ -9,15 +9,15 @@ const API_BASE_URL =
 function mapBackendScholarship(data: any): Scholarship {
   return {
     id: String(data.id),
-    title: data.title ?? "Untitled Scholarship",
-    university: data.university ?? "University",
-    degree: data.degree ?? "Master's",
-    field: data.field ?? "General",
-    funding: data.funding ?? "See details",
+    title: data.title || "Untitled Scholarship",
+    university: data.university || "University",
+    degree: data.degree || "Master's / PhD",
+    field: data.field || "General",
+    funding: data.funding || "Full / Partial Coverage",
     deadline: data.deadline ? String(data.deadline) : null,
-    status: data.is_active ? "Active" : "Closed",
+    // Safely default status to Active if is_active is true or undefined
+    status: data.is_active === false ? "Closed" : "Active",
 
-    // Map additional detail fields safely
     requirements: Array.isArray(data.eligibility_rules)
       ? data.eligibility_rules
       : typeof data.eligibility_rules === "string"
@@ -31,7 +31,7 @@ function mapBackendScholarship(data: any): Scholarship {
     aiSummary:
       data.ai_summary ||
       data.funding ||
-      "No detailed AI summary currently available.",
+      "No detailed AI summary available.",
     applicationLink: data.application_link || data.source_url || "#",
     sourceUrl: data.source_url || "#",
   };
@@ -44,7 +44,7 @@ export async function getScholarships(): Promise<Scholarship[]> {
       headers: {
         "Content-Type": "application/json",
       },
-      cache: "no-store", // Guarantees fresh database data on re-render
+      cache: "no-store",
     });
 
     if (!response.ok) {
@@ -52,15 +52,27 @@ export async function getScholarships(): Promise<Scholarship[]> {
     }
 
     const data = await response.json();
-    
-    // Handles paginated responses ({ items: [...] }) or direct array responses ([...])
-    const rawList: any[] = Array.isArray(data) ? data : data.items || [];
+
+    // Check all common list response wrappers
+    let rawList: any[] = [];
+    if (Array.isArray(data)) {
+      rawList = data;
+    } else if (data && Array.isArray(data.items)) {
+      rawList = data.items;
+    } else if (data && Array.isArray(data.scholarships)) {
+      rawList = data.scholarships;
+    } else if (data && Array.isArray(data.data)) {
+      rawList = data.data;
+    }
+
     return rawList.map(mapBackendScholarship);
   } catch (error) {
     console.error("Failed to fetch scholarships from backend:", error);
     return [];
   }
 }
+
+
 
 export async function getScholarshipById(
   id: string

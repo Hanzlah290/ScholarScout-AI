@@ -1,21 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import ContentSection from "@/components/layout/ContentSection";
 import Navbar from "@/components/layout/Navbar";
 import SearchSection from "@/components/layout/SearchSection";
 import StatsSection from "@/components/layout/StatsSection";
+import { getScholarships } from "@/services/scholarshipService";
 import type { Scholarship } from "@/types/scholarship";
 
-interface DashboardClientProps {
-  scholarships: Scholarship[];
-}
-
-export default function DashboardClient({
-  scholarships,
-}: DashboardClientProps) {
+export default function DashboardClient() {
+  const [scholarships, setScholarships] = useState<Scholarship[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    async function fetchFreshData() {
+      setLoading(true);
+      const data = await getScholarships();
+      setScholarships(data);
+      setLoading(false);
+    }
+
+    fetchFreshData();
+  }, []);
 
   const filteredScholarships = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -43,7 +51,13 @@ export default function DashboardClient({
 
         <StatsSection />
 
-        <ContentSection scholarships={filteredScholarships} />
+        {loading ? (
+          <div className="p-8 text-center text-muted-foreground">
+            Loading scholarships from database...
+          </div>
+        ) : (
+          <ContentSection scholarships={filteredScholarships} />
+        )}
       </div>
     </main>
   );

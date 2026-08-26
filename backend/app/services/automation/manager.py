@@ -59,21 +59,24 @@ class AutomationManager:
             cls._active_locks.discard(source_id)
 
     @staticmethod
-    def get_due_sources(db: Session) -> List[Source]:
-        """Fetch all active sources where next_check_at is due (<= NOW()) or unassigned."""
+    def get_due_sources(db: Session, limit: int = 3) -> list[Source]:
+        """
+        Fetch active sources that are due for execution.
+        Defaults to processing a maximum of 3 sources per batch run.
+        """
         now = datetime.now(timezone.utc)
         return (
             db.query(Source)
             .filter(
                 Source.enabled == True,
-                Source.status != "disabled",
-                or_(
-                    Source.next_check_at <= now,
-                    Source.next_check_at.is_(None)
-                )
+                Source.status.in_(["active", "error"]),
+                or_(Source.next_check_at.is_(None), Source.next_check_at <= now),
             )
+            .order_by(Source.next_check_at.asc().nullsfirst())
+            .limit(limit)
             .all()
         )
+    
 
     @staticmethod
     def record_success(db: Session, source: Source) -> None:

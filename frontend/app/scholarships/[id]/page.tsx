@@ -1,145 +1,101 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
+"use client";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { getScholarshipById } from "@/services/scholarshipService";
+import { useEffect, useState } from "react";
+import { getScholarships } from "@/services/scholarshipService";
+import type { Scholarship } from "@/types/scholarship";
 
-interface ScholarshipDetailsPageProps {
-  params: Promise<{
-    id: string;
-  }>;
-}
+export default function Home() {
+  const [scholarships, setScholarships] = useState<Scholarship[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
-export default async function ScholarshipDetailsPage({
-  params,
-}: ScholarshipDetailsPageProps) {
-  const { id } = await params;
+  useEffect(() => {
+    async function fetchFreshData() {
+      setLoading(true);
+      const data = await getScholarships();
+      setScholarships(data);
+      setLoading(false);
+    }
+    fetchFreshData();
+  }, []);
 
-  const scholarship = await getScholarshipById(id);
+  // Compute stats dynamically from backend response
+  const openScholarshipsCount = scholarships.filter(
+    (s) => s.status === "Active"
+  ).length;
 
-  if (!scholarship) {
-    notFound();
-  }
+  const filteredScholarships = scholarships.filter(
+    (s) =>
+      s.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.university.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
-        <Link
-          href="/"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          ← Back to Dashboard
-        </Link>
+    <main className="max-w-6xl mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center border p-4 rounded-lg bg-white shadow-sm">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            🎓 ScholarScout AI
+          </h1>
+          <p className="text-sm text-gray-500">China Scholarship Dashboard</p>
+        </div>
+        <span className="text-xs text-gray-400">
+          Last Scan: {scholarships.length > 0 ? "Just now" : "--"}
+        </span>
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl">
-              {scholarship.title}
-            </CardTitle>
+      {/* Search Input */}
+      <input
+        type="text"
+        placeholder="Search scholarships..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+      />
 
-            <p className="text-muted-foreground">
-              {scholarship.university}
-            </p>
-          </CardHeader>
+      {/* Dynamic Stats Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="border p-5 rounded-lg bg-white shadow-sm">
+          <p className="text-sm font-medium text-gray-600">Open Scholarships</p>
+          <p className="text-3xl font-bold mt-2">{openScholarshipsCount}</p>
+        </div>
+        <div className="border p-5 rounded-lg bg-white shadow-sm">
+          <p className="text-sm font-medium text-gray-600">Total Extracted</p>
+          <p className="text-3xl font-bold mt-2">{scholarships.length}</p>
+        </div>
+        <div className="border p-5 rounded-lg bg-white shadow-sm">
+          <p className="text-sm font-medium text-gray-600">Active Sources</p>
+          <p className="text-3xl font-bold mt-2">
+            {new Set(scholarships.map((s) => s.university)).size}
+          </p>
+        </div>
+      </div>
 
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Degree
-                </p>
-                <p>{scholarship.degree}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Field
-                </p>
-                <p>{scholarship.field}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Funding
-                </p>
-                <p>{scholarship.funding}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Deadline
-                </p>
-                <p>{scholarship.deadline ?? "Not specified"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Status
-                </p>
-                <p>{scholarship.status}</p>
-              </div>
-            </div>
-
-            <section>
-              <h2 className="mb-2 text-lg font-semibold">
-                AI Summary
-              </h2>
-
-              <p className="text-sm leading-6 text-muted-foreground">
-                {scholarship.aiSummary}
-              </p>
-            </section>
-
-            <section>
-              <h2 className="mb-2 text-lg font-semibold">
-                Requirements
-              </h2>
-
-              <ul className="list-disc space-y-1 pl-5 text-sm">
-                {scholarship.requirements.map((requirement) => (
-                  <li key={requirement}>{requirement}</li>
-                ))}
-              </ul>
-            </section>
-
-            <section>
-              <h2 className="mb-2 text-lg font-semibold">
-                Required Documents
-              </h2>
-
-              <ul className="list-disc space-y-1 pl-5 text-sm">
-                {scholarship.documentsRequired.map((document) => (
-                  <li key={document}>{document}</li>
-                ))}
-              </ul>
-            </section>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <a
-                href={scholarship.applicationLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground"
+      {/* Scholarship List or Empty State */}
+      <div className="border rounded-lg p-8 bg-white text-center shadow-sm">
+        {loading ? (
+          <p className="text-gray-500">Loading scholarships from database...</p>
+        ) : filteredScholarships.length > 0 ? (
+          <div className="grid gap-4 text-left">
+            {filteredScholarships.map((item) => (
+              <div
+                key={item.id}
+                className="border p-4 rounded-md hover:shadow-md transition"
               >
-                Apply
-              </a>
-
-              <a
-                href={scholarship.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md border px-4 py-2 text-center text-sm font-medium"
-              >
-                Original Source
-              </a>
-            </div>
-          </CardContent>
-        </Card>
+                <h3 className="font-bold text-lg text-blue-600">{item.title}</h3>
+                <p className="text-sm text-gray-600">
+                  {item.university} • {item.degree}
+                </p>
+                <p className="text-xs text-gray-400 mt-2">
+                  Deadline: {item.deadline || "N/A"}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500 font-medium">No scholarships found.</p>
+        )}
       </div>
     </main>
   );
