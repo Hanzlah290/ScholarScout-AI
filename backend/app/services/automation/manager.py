@@ -79,20 +79,33 @@ class AutomationManager:
     
 
     @staticmethod
-    def record_success(db: Session, source: Source) -> None:
-        """Update source timestamps after a successful pipeline run (+7 days cooldown)."""
+    def record_success(db: Session, source: Source, scholarships_found_count: int = 0) -> None:
+        """Update source status. If scholarships were found, complete the source permanently."""
         now = datetime.now(timezone.utc)
         source.last_checked_at = now
         source.last_success_at = now
         source.last_run_status = "success"
         source.consecutive_failures = 0
-        source.status = "active"
-        source.next_check_at = now + timedelta(days=7)
-        
+
+        # Rule Enforcement: Permanently complete source if scholarships were found
+        if scholarships_found_count > 0:
+            source.status = "completed"
+            source.next_check_at = None
+            logger.info(
+                f"[AUTOMATION MANAGER] Source '{source.name}' found {scholarships_found_count} scholarship(s). "
+                f"Marked as 'completed' (will not be re-checked)."
+            )
+        else:
+            source.status = "active"
+            source.next_check_at = now + timedelta(days=7)
+            logger.info(
+                f"[AUTOMATION MANAGER] Source '{source.name}' succeeded with 0 new scholarships. "
+                f"Next check scheduled for {source.next_check_at}."
+            )
+
         db.add(source)
         db.commit()
         db.refresh(source)
-        logger.info(f"[AUTOMATION MANAGER] Source '{source.name}' succeeded. Next check scheduled for {source.next_check_at}.")
 
     @staticmethod
     def record_failure(db: Session, source: Source, error_message: str) -> None:
@@ -128,8 +141,22 @@ class AutomationManager:
 
         try:
             logger.info(f"[AUTOMATION MANAGER] Executing pipeline for '{source.name}'...")
-            await self.pipeline.run(db, source)
-            self.record_success(db, source)
+            
+            # pipeline.run returns a PipelineResult Pydantic object
+            result = await self.pipeline.run(db, source)
+            
+            # Extract scholarship count safely from PipelineResult model fields
+            count = 0
+            if hasattr(result, "scholarships_created") and result.scholarships_created is not None:
+                count = len(result.scholarships_created) if isinstance(result.scholarships_created, list) else result.scholarships_created
+            elif hasattr(result, "scholarships_found") and result.scholarships_found is not None:
+                count = len(result.scholarships_found) if isinstance(result.scholarships_found, list) else result.scholarships_found
+            elif hasattr(result, "items") and result.items is not None:
+                count = len(result.items)
+            elif hasattr(result, "count") and result.count is not None:
+                count = result.count
+
+            self.record_success(db, source, scholarships_found_count=count)
             return True
         except Exception as exc:
             logger.error(f"[AUTOMATION MANAGER] Pipeline execution failed for '{source.name}': {exc}")
