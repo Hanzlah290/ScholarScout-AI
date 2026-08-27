@@ -42,7 +42,29 @@ class ScholarshipScheduler:
 
         self._scheduler.start()
 
+    def get_status(self) -> dict:
+        """Returns the live status and next execution timestamp of the pipeline job."""
+        if not self._scheduler or not self._scheduler.running:
+            return {
+                "running": False,
+                "status": "stopped",
+                "next_run_at": None,
+            }
+
+        job = self._scheduler.get_job("scholarship_due_processing")
+        next_run = job.next_run_time.isoformat() if (job and job.next_run_time) else None
+
+        return {
+            "running": True,
+            "status": "waiting",
+            "next_run_at": next_run,
+        }
+
     def shutdown(self) -> None:
         """Stop the scheduler safely."""
         if self._scheduler and self._scheduler.running:
             self._scheduler.shutdown(wait=False)
+
+
+# Global singleton instance for access across FastAPI routes
+scheduler_instance = ScholarshipScheduler()

@@ -4,16 +4,41 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
 from app.models.scholarship import Scholarship
+from app.models.source import Source
 from app.schemas.api import ScholarshipResponse
+from app.services.scheduler.service import scheduler_instance
 
 
 router = APIRouter(prefix="/scholarships", tags=["scholarships"])
 DatabaseSession = Annotated[Session, Depends(get_db)]
+
+
+@router.get("/stats")
+def get_system_stats(db: DatabaseSession):
+    """Fetch live counts, last scan timestamp, and background scheduler status."""
+    open_scholarships = db.query(Scholarship).filter(Scholarship.status == "Open").count()
+    sources_count = db.query(Source).count()
+    
+    # Get latest verified or updated scholarship timestamp for last scan
+    latest_scholarship = db.query(func.max(Scholarship.updated_at)).scalar()
+    last_scan_at = latest_scholarship.isoformat() if latest_scholarship else None
+
+    # Get live scheduler status
+    scheduler_info = scheduler_instance.get_status()
+
+    return {
+        "open_scholarships": open_scholarships,
+        "sources_count": sources_count,
+        "last_scan_at": last_scan_at,
+        "is_scheduler_running": scheduler_info["running"],
+        "scheduler_status": scheduler_info["status"],
+        "next_run_at": scheduler_info["next_run_at"],
+    }
 
 
 @router.get("", response_model=list[ScholarshipResponse])

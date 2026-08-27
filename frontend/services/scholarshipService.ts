@@ -101,3 +101,45 @@ export async function getScholarshipById(
     return null;
   }
 }
+
+export interface SystemStats {
+  openScholarships: number;
+  sourcesCount: number;
+  lastScanAt: string | null;
+  isSchedulerRunning: boolean;
+  schedulerStatus: "running" | "waiting" | "stopped";
+  nextRunAt: string | null;
+}
+
+export async function getSystemStats(): Promise<SystemStats> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/scholarships/stats`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        openScholarships: data.open_scholarships ?? 0,
+        sourcesCount: data.sources_count ?? 0,
+        lastScanAt: data.last_scan_at ?? null,
+        isSchedulerRunning: data.is_scheduler_running ?? false,
+        schedulerStatus: data.scheduler_status ?? "stopped",
+        nextRunAt: data.next_run_at ?? null,
+      };
+    }
+  } catch (error) {
+    console.warn("Stats API endpoint offline, returning defaults.");
+  }
+
+  return {
+    openScholarships: 0,
+    sourcesCount: 0,
+    lastScanAt: null,
+    isSchedulerRunning: false,
+    schedulerStatus: "stopped",
+    nextRunAt: null,
+  };
+}

@@ -10,8 +10,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
+
 from app.api.routes import scholarships_router, sources_router
 from app.config.settings import settings
+from app.services.scheduler.service import scheduler_instance
+
 from app.services.scheduler.discovery_job import (
     DiscoveryAlreadyRunning,
     run_scheduled_discovery,
@@ -20,25 +23,15 @@ from app.services.scheduler.discovery_job import (
 # Instantiate the APScheduler object
 scheduler = AsyncIOScheduler()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # STARTUP: Register discovery job to run every N hours
-    scheduler.add_job(
-        run_scheduled_discovery,
-        trigger="interval",
-        hours=settings.SCHEDULER_INTERVAL_HOURS,
-        id="scheduled_scholarship_discovery",
-        replace_existing=True,
-    )
-    scheduler.start()
-    print(f"=== APScheduler Started: Running discovery every {settings.SCHEDULER_INTERVAL_HOURS} hours ===")
-    
+    # Startup: Initialize background scheduler engine
+    print("⏰ Starting background ScholarshipScheduler...")
+    scheduler_instance.start()
     yield
-    
-    # SHUTDOWN: Gracefully stop scheduler
-    scheduler.shutdown()
-    print("=== APScheduler Stopped cleanly ===")
+    # Shutdown: Clean up scheduler threads
+    print("🛑 Shutting down background ScholarshipScheduler...")
+    scheduler_instance.shutdown()
 
 
 app = FastAPI(
@@ -46,6 +39,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Register API routers cleanly
+app.include_router(scholarships_router, prefix="/api/v1")
+app.include_router(sources_router, prefix="/api/v1")
 
 # Combine configured origins from settings with localhost:3000
 origins = [

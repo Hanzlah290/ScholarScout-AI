@@ -1,100 +1,93 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getScholarships } from "@/services/scholarshipService";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import Navbar from "@/components/layout/Navbar";
+import { getScholarshipById } from "@/services/scholarshipService";
 import type { Scholarship } from "@/types/scholarship";
 
-export default function Home() {
-  const [scholarships, setScholarships] = useState<Scholarship[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [searchTerm, setSearchTerm] = useState<string>("");
+export default function ScholarshipDetailPage() {
+  const params = useParams();
+  const id = params?.id as string;
+
+  const [scholarship, setScholarship] = useState<Scholarship | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchFreshData() {
+    async function loadData() {
+      if (!id) return;
       setLoading(true);
-      const data = await getScholarships();
-      setScholarships(data);
+      const data = await getScholarshipById(id);
+      setScholarship(data);
       setLoading(false);
     }
-    fetchFreshData();
-  }, []);
-
-  // Compute stats dynamically from backend response
-  const openScholarshipsCount = scholarships.filter(
-    (s) => s.status === "Active"
-  ).length;
-
-  const filteredScholarships = scholarships.filter(
-    (s) =>
-      s.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.university.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    loadData();
+  }, [id]);
 
   return (
-    <main className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center border p-4 rounded-lg bg-white shadow-sm">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            🎓 ScholarScout AI
-          </h1>
-          <p className="text-sm text-gray-500">China Scholarship Dashboard</p>
-        </div>
-        <span className="text-xs text-gray-400">
-          Last Scan: {scholarships.length > 0 ? "Just now" : "--"}
-        </span>
-      </div>
+    <main className="min-h-screen bg-background p-4 sm:p-6">
+      <div className="mx-auto max-w-4xl space-y-6">
+        <Navbar />
 
-      {/* Search Input */}
-      <input
-        type="text"
-        placeholder="Search scholarships..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-      />
+        <Link
+          href="/"
+          className="inline-flex items-center text-sm text-muted-foreground hover:underline"
+        >
+          ← Back to Dashboard
+        </Link>
 
-      {/* Dynamic Stats Cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="border p-5 rounded-lg bg-white shadow-sm">
-          <p className="text-sm font-medium text-gray-600">Open Scholarships</p>
-          <p className="text-3xl font-bold mt-2">{openScholarshipsCount}</p>
-        </div>
-        <div className="border p-5 rounded-lg bg-white shadow-sm">
-          <p className="text-sm font-medium text-gray-600">Total Extracted</p>
-          <p className="text-3xl font-bold mt-2">{scholarships.length}</p>
-        </div>
-        <div className="border p-5 rounded-lg bg-white shadow-sm">
-          <p className="text-sm font-medium text-gray-600">Active Sources</p>
-          <p className="text-3xl font-bold mt-2">
-            {new Set(scholarships.map((s) => s.university)).size}
-          </p>
-        </div>
-      </div>
-
-      {/* Scholarship List or Empty State */}
-      <div className="border rounded-lg p-8 bg-white text-center shadow-sm">
         {loading ? (
-          <p className="text-gray-500">Loading scholarships from database...</p>
-        ) : filteredScholarships.length > 0 ? (
-          <div className="grid gap-4 text-left">
-            {filteredScholarships.map((item) => (
-              <div
-                key={item.id}
-                className="border p-4 rounded-md hover:shadow-md transition"
-              >
-                <h3 className="font-bold text-lg text-blue-600">{item.title}</h3>
-                <p className="text-sm text-gray-600">
-                  {item.university} • {item.degree}
-                </p>
-                <p className="text-xs text-gray-400 mt-2">
-                  Deadline: {item.deadline || "N/A"}
-                </p>
-              </div>
-            ))}
+          <div className="p-8 text-center text-muted-foreground">
+            Loading scholarship details...
+          </div>
+        ) : !scholarship ? (
+          <div className="p-8 text-center text-muted-foreground">
+            Scholarship not found.
           </div>
         ) : (
-          <p className="text-gray-500 font-medium">No scholarships found.</p>
+          <div className="rounded-lg border bg-card p-6 space-y-6 shadow-sm">
+            <div>
+              <h1 className="text-2xl font-bold">{scholarship.title}</h1>
+              <p className="text-sm text-muted-foreground">{scholarship.university}</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm border-y py-4">
+              <p><strong>Degree Level:</strong> {scholarship.degree}</p>
+              <p><strong>Field of Study:</strong> {scholarship.field}</p>
+              <p><strong>Funding Type:</strong> {scholarship.funding}</p>
+              <p><strong>Deadline:</strong> {scholarship.deadline || "Not specified"}</p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-base mb-2">🤖 AI Summary & Coverage</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {scholarship.aiSummary}
+              </p>
+            </div>
+
+            {scholarship.requirements.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-base mb-2">📋 Eligibility & Requirements</h3>
+                <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                  {scholarship.requirements.map((req, idx) => (
+                    <li key={idx}>{req}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="pt-4 border-t flex justify-end">
+              <a
+                href={scholarship.applicationLink || scholarship.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
+              >
+                Apply on Official University Website ↗
+              </a>
+            </div>
+          </div>
         )}
       </div>
     </main>
